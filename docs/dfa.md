@@ -54,8 +54,9 @@ We assume the following in the rest of the document:
     state.
   - It has a single start state,
   - It has a set of accepting states.
- - While most machines are little endian, we use big-endian representations of
-   integers to increase readability.
+ - While most machines that our DFAs are executed on are are little endian,
+   we use big-endian representations of integers to increase human
+   readability. in our examples.
   - We use 1-byte, 2-byte, 4-byte, and 8-byte integer values; all are
     unsigned.
 
@@ -85,7 +86,6 @@ After the header, there is an optional `alphabet-spec` section:
     | length (8) | num-elem (8) | data (v) | ...
      ------------ -------------- ----------  ...
 
-
 ### Magic Identifier (`magic`)
 
 The first 3 bytes denote the type of the file; this is its magic value. We
@@ -114,12 +114,12 @@ values in this version of the spec:
  - `{0x03}` -- UTF-16
  - `{0x04}` -- UTF-32
  - `{0x05}` -- 1-Byte Integer (`uint8_t`)
- - `{0x07}` -- 2-Byte Integer (`uint16_t`)
- - `{0x08}` -- 4-Byte Integer (`uint32_t`)
- - `{0x09}` -- 8-byte Integer (`uint64_t`)
- - `{0x0A}` -- Custom fixed-width data (`custom-fixed`)
- - `{0x0B}` -- Custom variable-width data (`custom-variable`)
- - Values 0x0C-0x41 are reserved for later versions of this spec.
+ - `{0x06}` -- 2-Byte Integer (`uint16_t`)
+ - `{0x07}` -- 4-Byte Integer (`uint32_t`)
+ - `{0x08}` -- 8-byte Integer (`uint64_t`)
+ - `{0x09}` -- Custom fixed-width data (`custom-fixed`)
+ - `{0x0A}` -- Custom variable-width data (`custom-variable`)
+ - Values 0x0B-0x41 are reserved for later versions of this spec.
  - Values 0x42 and above are reserved for implementation-defined values.
 
 When values `0x01` to `0x04` are specified (ASCII to 8-Byte Integer), the next
@@ -131,9 +131,9 @@ present, allowing the range of integers to be reduced. When values `0x0A` or
 `0x0B` are specified, the `alphabet-spec` field has to be present and
 non-empty.
 
-Alphabets `0x01`, `0x02`, and `0x04` through `0x09` are easiest to parse: they
-always have a fixed-sized identifier. Their identifier is the value of the
-letter in the alphabet. While values `0x02` and `0x03` are harder to parse due
+Alphabets `0x01` and `0x04` through `0x09` are easiest to parse: they always
+have a fixed-sized identifier. Their identifier is the value of the letter in
+the alphabet. While values `0x02` and `0x03` are slightly harder to parse due
 to their variable-width nature, they share the property that their identifier
 is the value of the letter in the alphabet. Thus, they can be parsed directly.
 
@@ -180,14 +180,16 @@ field, `length` must have value at least 8.
 
 After the `length` field comes the 8-byte integer value denoting the number of
 elements in the alphabet. Implementations use this value to determine the size
-of the alphabet letter identifier field.
+of the alphabet letter identifier field. Note that its exact purpose depends
+on which algorithm specifier is present.
 
 
 ##### Empty Alphabet Specifier (`alphabet-spec-empty`)
 
-When dealing with reserved spec values which don't require custom data but
-which do require, give an empty alphabet specifier. This is done by specifying
-a `length` field with value 8 and a `num-elem` of value 0.
+Some usages of reserved alphabet spec values don't require custom data but
+do require an Alphabet Specifier. In this case, give an empty alphabet
+specifier. This is done by specifying a `length` field with value 8 and a
+`num-elem` of value 0. This means that there is no `data` field.
 
 
 ##### Bounded Range Alphabet Specifier (`alphabet-spec-bounded`)
@@ -202,19 +204,39 @@ are 8-byte integers specified in the required `data` field:
 
 In particular, this means that while 1-byte letters may be used internally
 for storage, the numbers need only correspond to a 1-byte range. For example,
-using the min-value of `0xFFFFFF00` to `0xFFFFFFFF` with an alphabet id of
-`0x05` would let you internally store the range as 1 byte, even though the
-values themselves are of 4 bytes. This provides DFA storage savings over using
-the custom tag (`0x0A`, which would require listing all 4-byte values in the
-range) or over using the 4-byte integer tag (`0x08`, optionally with another
-bounded range specifier). This means that any integer values passed to the
-library API must be 8-bytes.
+using the range of `0xFFFFFF00` to `0xFFFFFFFF` with an alphabet id of `0x05`
+would let you internally store the alphabet as a 1 byte identifier, even though
+the alphabet values themselves are of 4 bytes. This provides DFA storage savings
+over using the custom tag (`0x0A`, which would require listing all 4-byte values
+in the range) or over using the 4-byte integer tag (`0x08`, optionally with
+another bounded range specifier). This means that any integer values passed to
+the library API must be 8-bytes.
+
+`alphabet-spec-num-elem` must be specified and correctly reflect the number of
+elements (`max-value - min-value + 1`).
 
 
 ##### Fixed-Width Elements (`alphabet-spec-custom-fixed`)
 
 When the `custom-fixed` alphabet type is specified, the `num-elems` field must
-be specified and non-zero. The `data` field takes
+be specified and non-zero. The `data` field takes the form:
+
+     ------------------ -------------------------  ...
+    | letter-width (8) | letter 1 (letter-width) | ...
+     ------------------ -------------------------  ...
+     --------------------------------  ...
+    | letter num-elem (letter-width) | ...
+     --------------------------------  ...
+
+The first field is `letter-width`, which is the width in bytes of each letter.
+Then comes `num-elem` letters, each with width `letter-width` bytes. These are
+ordered. That is, identifier 0 corresponds to the first letter slot,
+identifier 1 the next, up to an identifier with value `num-elem` minus one.
+
+This requires that `alphabet-spec-num-elem` must be specified and valid.
+
+Each element is easily read for parsing: from the offset of the first letter
+field (`letter 0`), it is easy to find the.
 
 
 ##### Variable-Width Elements (`alphabet-spec-custom-variable`)
