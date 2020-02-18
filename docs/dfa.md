@@ -119,8 +119,8 @@ values in this version of the spec:
  - `{0x08}` -- 8-byte Integer (`uint64_t`)
  - `{0x09}` -- Custom fixed-width data (`custom-fixed`)
  - `{0x0A}` -- Custom variable-width data (`custom-variable`)
- - Values 0x0B-0x41 are reserved for later versions of this spec.
- - Values 0x42 and above are reserved for implementation-defined values.
+ - Values 0x0B-0x4F are reserved for later versions of this spec.
+ - Values 0x50 and above are reserved for implementation-defined values.
 
 When values `0x01` to `0x04` are specified (ASCII to 8-Byte Integer), the next
 section (`alphabet-spec`) is omitted. When value 0x05 or later is specified,
@@ -181,7 +181,8 @@ field, `length` must have value at least 8.
 After the `length` field comes the 8-byte integer value denoting the number of
 elements in the alphabet. Implementations use this value to determine the size
 of the alphabet letter identifier field. Note that its exact purpose depends
-on which algorithm specifier is present.
+on which algorithm specifier is present and does not necessarily imply that a
+null alphabet was specified.
 
 
 ##### Empty Alphabet Specifier (`alphabet-spec-empty`)
@@ -236,12 +237,81 @@ identifier 1 the next, up to an identifier with value `num-elem` minus one.
 This requires that `alphabet-spec-num-elem` must be specified and valid.
 
 Each element is easily read for parsing: from the offset of the first letter
-field (`letter 0`), it is easy to find the.
-
+field (`letter 0`), it is easy to find the letter for the current identifier.
+However, it is up to the application to handle mapping letters back onto
+identifiers with an appropriate data structure.
 
 ##### Variable-Width Elements (`alphabet-spec-custom-variable`)
 
+When the `custom-variable` alphabet type is specified, the `num-elems` field
+must be specified and non-zero. The `data` field takes the form:
+
+     -------------------- ---------------------------  ...
+    | letter-1-width (8) | letter 1 (letter-1-width) | ...
+     -------------------- ---------------------------  ...
+     --------------------------- -----------------------------------------  ...
+    | letter-num-elem-width (8) | letter num-elem (letter-num-elem-width) | ...
+     --------------------------- -----------------------------------------  ...
+
+Each letter width must be greater than zero.
+
+In other words, each letter is a pair of `(size, bytes-of-letter)`, taking up
+at least 9 bytes total. Parsing this data structure is much harder: because
+each letter takes up a variable width, the application cannot jump simply to
+the letter specified by the identifier. It is suggested that applications
+build alternative in-memory data structures for suitably sized DFAs instead.
+
 ### State
+
+This section defines the state-related fields and how to parse them.
+
+#### State Identifier (`state-id`)
+
+The next byte denotes the state used by the DFA. We define the following
+values in this version of the spec:
+
+ - `{0x01}` -- unnamed states (numerical ids only)
+ - `{0x02}` -- named states
+ - Values 0x02-0x4F are reserved for later versions of this spec.
+ - Values 0x50 and above are reserved for implementation defined values.
+
+Including named states allows DFAs created on one machine to use the same
+names for the states on a different machine.
+
+
+#### State Specifier (`state-spec`)
+
+The next section defines the states used by the DFA. It is always present. The
+header for this specification takes the following format:
+
+     ------------ -------------- ----------
+    | length (8) | num-elem (8) | data (v) |
+     ------------ -------------- ----------
+
+`data` is defined to be a variable-length field dependent on the choice of
+state to be stored.
+
+
+##### State Specifier Length (`state-spec-length`)
+
+This section begins with an 8-byte integer value denoting the length of the
+remainder of the `state-spec` section. Since `num-elem` is a required field,
+`length` must have value at least 8.
+
+
+##### State Specifier Number of Elements (`state-spec-num-elem`)
+
+After the `length` field comes the 8-byte integer value denoting the number
+of states in the DFA. Implementations use this value to determine the size of
+the state identifier field. Unlike the `alphabet-spec-num-elem` field, this
+field always exactly identifies the number of states in the DFA.
+
+
+##### State Specifier Empty (`state-spec-empty`)
+
+Some usages of a state specifier don't require any custom data, even though
+the `state-spec` section is mandatory. In this case, give an empty state
+specifier, omitting the `data` field.
 
 ### Terminations
 
@@ -288,6 +358,7 @@ End of fixed-sized header. This is a DFA and version 1 of the spec.
     0x00 -  ""                              ""
     0x00 -  ""                              ""
     0x00 -  ""                              ""
+    <no alphabet-spec-data field>
     ----
     17 bytes - alphabet-spec
 
@@ -314,6 +385,7 @@ field) to denote that we're using the default range for this alphabet of
     0x00 -  ""                           ""
     0x00 -  ""                           ""
     0x02 -  ""                           ""
+    <no state-spec-data field>
     0x00 - 1 byte: start-state (0)
     ----
     17 bytes - state-spec
@@ -323,9 +395,9 @@ field. Our DFA will have two fields: a starting state (id: 0) and an accepting
 state (id: 1). Due to a later parameter, we don't need an explicit failure
 state because we fail on an unspecified transition.
 
-Note that the `start-state` field is of length dependent on the value of
-`state-spec-num-elems`. Since the latter's value is 2, each state will be
-identified by a single byte.
+Note that the size of the `start-state` field is of length dependent on the
+value of `state-spec-num-elems`. Since the latter's value is 2, each state
+will be identified by a single byte.
 
     0x01 - 1 byte: accept-or-reject
     0x00 - 8 bytes: num-accept (1)
