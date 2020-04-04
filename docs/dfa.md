@@ -241,6 +241,7 @@ field (`letter 0`), it is easy to find the letter for the current identifier.
 However, it is up to the application to handle mapping letters back onto
 identifiers with an appropriate data structure.
 
+
 ##### Variable-Width Elements (`alphabet-spec-custom-variable`)
 
 When the `custom-variable` alphabet type is specified, the `num-elems` field
@@ -261,9 +262,18 @@ each letter takes up a variable width, the application cannot jump simply to
 the letter specified by the identifier. It is suggested that applications
 build alternative in-memory data structures for suitably sized DFAs instead.
 
+
 ### State
 
 This section defines the state-related fields and how to parse them.
+
+States begin with value 0. They are encoded elsewhere as a variable number of
+bytes (1, 2, 4, or 8), depending on the number of elements (defined below in
+`state-spec-num-elem`).
+
+States can be named with variable-width identifiers, allowing different
+implementations to use the same names without sending additional data.
+
 
 #### State Identifier (`state-id`)
 
@@ -284,9 +294,9 @@ names for the states on a different machine.
 The next section defines the states used by the DFA. It is always present. The
 header for this specification takes the following format:
 
-     ------------ -------------- ----------
-    | length (8) | num-elem (8) | data (v) |
-     ------------ -------------- ----------
+     ------------ -------------- ---------- -----------------
+    | length (8) | num-elem (8) | data (v) | start-state (v) |
+     ------------ -------------- ---------- -----------------
 
 `data` is defined to be a variable-length field dependent on the choice of
 state to be stored.
@@ -295,8 +305,9 @@ state to be stored.
 ##### State Specifier Length (`state-spec-length`)
 
 This section begins with an 8-byte integer value denoting the length of the
-remainder of the `state-spec` section. Since `num-elem` is a required field,
-`length` must have value at least 8.
+remainder of the `state-spec` section. Since `num-elem` and `start-state`
+are both required fields, `length` must have value at least 8 plus the minimum
+number of bytes to specify the starting state.
 
 
 ##### State Specifier Number of Elements (`state-spec-num-elem`)
@@ -313,11 +324,147 @@ Some usages of a state specifier don't require any custom data, even though
 the `state-spec` section is mandatory. In this case, give an empty state
 specifier, omitting the `data` field.
 
+
+##### State Specifier Named (`state-spec-named`)
+
+When the value of the `state-spec-length` exceeds 8 bytes, this implies data
+is non-empty. We define a named state specifier as follows:
+
+     ----------------------- ---------------------  ...
+    | state-name-length (8) | state-name-data (v) | ...
+     ----------------------- ---------------------  ...
+
+Each state has the above structure repeated. This gives an `O(n)` lookup time
+to access the name of any given state; it is suggested that implementations
+optimize this when necessary.
+
+#### Start State (`state-spec-start`)
+
+After the `state-spec-data` field comes a variable width starting state
+identifier. Length of this field depends on the number of states encoded
+in the `state-spec-num-elem` field.
+
+
 ### Terminations
+
+This section defines the set of terminating states in the DFA.
+
+
+#### Termination Spec (`term-spec`)
+
+The next byte determines whether the of terminating states is given as a list
+of accepted states or a list of rejected states. This allows for encoding
+whichever list of states is smaller. We define the following values in this
+version of the spec:
+
+ - `{0x01}` -- accept,
+ - `{0x02}` -- reject,
+ - Values 0x03-0x4F are reserved for later versions of this spec.
+ - Values 0x50 and above are reserved for implementation-defined values.
+
+
+#### Termination States (`term-states`)
+
+The next section defines the set of termination states with the above status
+(accept or reject). The header for this specification takes the following
+format:
+
+     ------------ ----------
+    | length (8) | data (v) |
+     ------------ ----------
+
+`length` is the size of the data segment, in bytes, and `data` is a list of
+state identifiers. Each data element is the width of a single state; this is
+given above by the number of states as defined in the `state-spec-num-elem`
+field. The minimum number of bits required to parse this field should be used
+when encoding it.
+
 
 ### Transition Index
 
+This section defines the index of transition functions.
+
+
+#### Transition Index Specifier (`transition-index-spec`)
+
+The next section defines the offsets (relative to the end of this section)
+of the transition functions for each state. The header for this specification
+takes the following format:
+
+     ------------ --------------------       ---------------------------
+    | length (8) | state-0-offset (8) | ... | state-num-elem-offset (8) |
+     ------------ --------------------       ---------------------------
+
+Note that each state must define a state transition function, even if it only
+accepts or rejects all transitions out of it. This makes the total size of
+this section `8 + 8*num-elem` bytes.
+
+
 ### Transition Function
+
+This section defines the state transitions for a single state.
+
+
+#### Transition Function Specifier (`transition-func-spec`)
+
+The next section defines the transition function for a particular starting
+state. The header for this specification takes the following format:
+
+     ------------ -------------- -------------- -------------
+    | length (8) | unknown (1+) | letter-1 (v) | state-1 (v) | ...
+     ------------ -------------- -------------- -------------
+     -------------- -------------
+    | letter-n (v) | state-n (v) |
+     -------------- -------------
+
+`length` encodes the number of bytes in the remainder of this transition
+function specifier. It must be at least 1, to encode what happens to an
+unknown state. The number of defined transitions can be calculated by
+computing:
+
+                     length - sizeof(unknown)
+    transitions = ------------------------------
+                  sizeof(letter) + sizeof(state)
+
+Where `sizeof(letter)` is the size of a letter identifier (defined above
+based on `alphabet-id`), and `sizeof(state)` is the size of a state
+identifier (defined above based on `state-spec-num-elem`). Determining
+`sizeof(unknown)` is defined below.
+
+Because this is a DFA, each `letter` must be unique within a transition
+function specifier section.
+
+
+#### Transition Function Unknown Transitions (`transition-func-spec-unknown`)
+
+When the given letter is not found in the transition function, a default
+must be provided. The following identifiers are defined:
+
+ - `{0x01}` - reject all (1 byte)
+ - `{0x02}` - accept all (1 byte)
+ - `{0x03 ...}` - go to state (1 + `v` bytes)
+ - Values 0x04-0x4F are reserved for future versions of this specification.
+ - Values 0x50 and above are implementation defined.
+
+In the case of accept all or reject all, this field is one byte. However,
+in the case of value `0x03` in the first byte, the width of this field is
+the size of a state identifier plus one, allowing the remaining bytes to
+encode the desired state. This means that the first byte must be read before
+the length of this field can be computed.
+
+
+#### Transition Function Definition (`transition-func-spec-def`)
+
+The last component of the transition function specification defines the
+transition function relative to a particular current state:
+
+     ------------ -----------
+    | letter (v) | state (v) |
+     ------------ -----------
+
+The width of a letter is determined above by `alphabet-id` and the width of
+the state identifier is determined above by `state-spec-num-elem`.
+
 
 ## Example DFAs
 
