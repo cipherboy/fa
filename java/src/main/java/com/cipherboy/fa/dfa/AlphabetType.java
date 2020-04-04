@@ -1,6 +1,6 @@
 package com.cipherboy.fa.dfa;
 
-public enum Alphabet {
+public enum AlphabetType {
     ASCII ((byte) 0x01),
     UTF8 ((byte) 0x02),
     UTF16 ((byte) 0x03),
