@@ -98,6 +98,7 @@ typedef struct {
 
     /* State Specifier */
     enum dfa_state state_type;
+    uint64_t num_states;
     union {
         dfa_state_named named;
     } state_data;
@@ -109,6 +110,5 @@ typedef struct {
     uint64_t *terminating_states;
 
     /* Transitions */
-    uint64_t *transition_length;
     dfa_transition_function *funcs;
 } dfa_t;
