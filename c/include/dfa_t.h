@@ -52,10 +52,43 @@ typedef enum dfa_state {
     dfa_named   = 0x02
 } dfa_state;
 
+typedef struct {
+    uint64_t *lengths;
+    uint8_t **names;
+} dfa_state_named;
+
+/* The DFA specification defines the following termination types. */
+typedef enum dfa_termination {
+    dfa_reject_states = 0x01,
+    dfa_accept_states = 0x02
+} dfa_termination;
+
+/* The DFA specification defines the following state shortcuts. */
+typedef enum dfa_unknown_transitions {
+    dfa_reject = 0x01,
+    dfa_accept = 0x02,
+    dfa_goto   = 0x03
+} dfa_unknown_transitions;
+
+typedef struct {
+    uint64_t letter;
+    uint64_t state;
+} dfa_transition;
+
+typedef struct {
+    uint64_t state;
+    dfa_unknown_transitions unknown;
+    union {
+        uint64_t goto_state;
+    } unknown_data;
+    uint64_t num_transitions;
+    dfa_transition *transitions;
+} dfa_transition_function;
+
 /* DFA data structure. */
 typedef struct {
     /* Alphabet Specifier */
-    enum dfa_alphabet alphabet;
+    enum dfa_alphabet alphabet_type;
     uint64_t num_letters;
     union {
         dfa_alphabet_bounded_t            bounded;
@@ -64,11 +97,18 @@ typedef struct {
     } alphabet_data;
 
     /* State Specifier */
-    enum dfa_state state;
+    enum dfa_state state_type;
     union {
         dfa_state_named named;
     } state_data;
     uint64_t start_state;
 
     /* Terminations */
+    enum dfa_termination termination_type;
+    uint64_t num_terminating_states;
+    uint64_t *terminating_states;
+
+    /* Transitions */
+    uint64_t *transition_length;
+    dfa_transition_function *funcs;
 } dfa_t;
