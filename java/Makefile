@@ -4,9 +4,9 @@ clean:
 	mvn clean
 
 compile:
-	mvn compile
+	mvn compile javadoc:javadoc
 
 check: test
 
 test:
-	mvn test
+	mvn test site

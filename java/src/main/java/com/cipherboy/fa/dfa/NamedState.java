@@ -1,6 +1,6 @@
 package com.cipherboy.fa.dfa;
 
-public class NamedState extends StateData {
+public final class NamedState extends StateData {
     private byte[][] names;
 
     public NamedState() {

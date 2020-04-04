@@ -6,7 +6,7 @@ public enum StateType {
 
     private byte identifier;
 
-    private State(byte identifier) {
+    private StateType(byte identifier) {
         this.identifier = identifier;
     }
 
@@ -14,8 +14,8 @@ public enum StateType {
         return identifier;
     }
 
-    public State valueOf(byte identifier) {
-        for (State state : State.values()) {
+    public StateType valueOf(byte identifier) {
+        for (StateType state : StateType.values()) {
             if (state.identifier == identifier) {
                 return state;
             }

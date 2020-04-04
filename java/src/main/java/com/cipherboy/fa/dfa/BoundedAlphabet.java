@@ -1,6 +1,6 @@
 package com.cipherboy.fa.dfa;
 
-public class BoundedAlphabet extends AlphabetData {
+public final class BoundedAlphabet extends AlphabetData {
     private long minValue;
     private long maxValue;
 

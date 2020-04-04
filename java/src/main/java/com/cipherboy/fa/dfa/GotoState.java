@@ -1,6 +1,6 @@
 package com.cipherboy.fa.dfa;
 
-public class GotoState extends UnknownData {
+public final class GotoState extends UnknownData {
     private long state;
 
     public GotoState(long size) {

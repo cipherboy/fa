@@ -6,7 +6,7 @@ public enum TerminationType {
 
     private byte identifier;
 
-    private Termination(byte identifier) {
+    private TerminationType(byte identifier) {
         this.identifier = identifier;
     }
 
@@ -14,8 +14,8 @@ public enum TerminationType {
         return identifier;
     }
 
-    public Termination valueOf(byte identifier) {
-        for (Termination termination : Termination.values()) {
+    public TerminationType valueOf(byte identifier) {
+        for (TerminationType termination : TerminationType.values()) {
             if (termination.identifier == identifier) {
                 return termination;
             }

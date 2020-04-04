@@ -14,7 +14,7 @@ public enum AlphabetType {
 
     private byte identifier;
 
-    private Alphabet(byte identifier) {
+    private AlphabetType(byte identifier) {
         this.identifier = identifier;
     }
 
@@ -22,8 +22,8 @@ public enum AlphabetType {
         return identifier;
     }
 
-    public Alphabet valueOf(byte identifier) {
-        for (Alphabet alpha : Alphabet.values()) {
+    public AlphabetType valueOf(byte identifier) {
+        for (AlphabetType alpha : AlphabetType.values()) {
             if (alpha.identifier == identifier) {
                 return alpha;
             }

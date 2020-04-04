@@ -1,8 +1,8 @@
 package com.cipherboy.fa.dfa;
 
-public class CustomFixedAlphabet extends AlphabetData {
+public final class CustomFixedAlphabet extends AlphabetData {
     private long letterWidth;
-    byte[][] letters;
+    private byte[][] letters;
 
     public CustomFixedAlphabet() {
         setType(DataType.CustomFixed);
