@@ -1,5 +1,8 @@
 package com.cipherboy.fa.dfa;
 
+/**
+ * A DFA is a type of finite automata.
+ */
 public class DFA {
     private AlphabetType alphabetType;
     private long numLetters;
@@ -14,4 +17,11 @@ public class DFA {
     private long[] terminatingStates;
 
     private TransitionFunction[] transitionFunctions;
+
+    public DFA() {}
+
+    public Letter addLetter() {
+        numLetters += 1;
+        return new Letter(this);
+    }
 }

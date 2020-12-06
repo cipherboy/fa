@@ -1,10 +1,14 @@
-all: compile
+all:
+	mvn clean compile javadoc:javadoc test site
 
 clean:
 	mvn clean
 
 compile:
-	mvn compile javadoc:javadoc
+	mvn compile
+
+doc:
+	mvn javadoc:javadoc
 
 check: test
 
