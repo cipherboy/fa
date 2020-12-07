@@ -36,11 +36,15 @@ need not be complete when initially written to disk. This is a direct
 consequence of item 4. Additionally, we impose the additional constraint that
 extending an already-serialized DFA will not require storing the entire DFA
 in memory at once, but may require incrementally rewriting the entire DFA.
+This requirement thus serves as a trade-off: if the entire DFA can be easily
+loaded into memory, we can write it out at much higher speeds than incrementally
+reading and rewriting the DFA would allow.
 
 Our resulting format has a limitation as a result of goals 3-6: two DFAs with
 equal states, alphabets, and transitions may not have the same format on disk.
 This is because they may have been constructed differently, resulting in
-different ordering of states, or even in redundant data.
+different ordering of states, or even in redundant data. This means that some
+notion of a "deep" comparison would be required.
 
 
 ## Definitions
@@ -51,14 +55,28 @@ We assume the following in the rest of the document:
   - It has an alphabet set `A`,
   - It has a state set `S`,
   - It has a transition function mapping from the tuple (state, letter) to a
-    state.
-  - It has a single start state,
+    state,
+  - It has a single start state, and
   - It has a set of accepting states.
  - While most machines that our DFAs are executed on are are little endian,
    we use big-endian representations of integers to increase human
-   readability. in our examples.
-  - We use 1-byte, 2-byte, 4-byte, and 8-byte integer values; all are
-    unsigned.
+   readability.
+  - We use 1-byte, 2-byte, 4-byte, and 8-byte integer values in the
+    serialized format; all are unsigned.
+
+In the following diagrams, we use the format:
+
+     --------------------------------------------  ...
+    | <name of element> (<byte size of element>) | ...
+     --------------------------------------------  ...
+
+This says that the next byte of the encoded DFA is `<name of element>`, and
+serializing it requires `<byte size of element>` bytes. Note that names
+are unique only the section of this documentation; many names (such as
+`length`) are duplicated in later sections. Additionally, we use three-line
+ellipsis (here on the right side of the above diagram) to denote that there
+is more data, either before or after this segment when multiple diagrams are
+interspersed with text.
 
 
 ## File Format
@@ -71,35 +89,84 @@ JSON would place on us.
 
 ### Overview
 
-Each DFA has the following fixed-sized five-byte header. After this header,
+Each DFA has the following fixed-sized four-byte header. After this header,
 the rest of the file is of potentially variable-length. We assume that the
 size of the entire DFA is known before hand, and thus need not be encoded
-in the DFA itself.
+in the DFA itself. We do this because just knowing the total size of the DFA
+is not sufficient to allow a streaming DFA parser to correctly allocate
+internal data structures. However, because each subsequent section defines a
+length and number of encoded elements, a streaming DFA parser can still
+determine how much data to allocate for each section and reject any large
+DFAs it refuses to parse.
 
-     ----------- ------------- -----------------  ...
-    | magic (3) | version (1) | alphabet-id (1) | ...
-     ----------- ------------- -----------------  ...
+The `header` is defined by:
 
-After the header, there is an optional `alphabet-spec` section:
+     ----------- ------------- ------------------- --------------------  ...
+    | magic (3) | version (1) | state-spec-offset | term-states-offset | ...
+     ----------- ------------- ------------------- --------------------  ...
 
-     ------------ -------------- ----------  ...
-    | length (8) | num-elem (8) | data (v) | ...
-     ------------ -------------- ----------  ...
 
-### Magic Identifier (`magic`)
+After the `header`, comes the `alphabet-spec` section:
+
+    ...  ----------------- ------------ -------------- ----------  ...
+    ... | alphabet-id (1) | length (8) | num-elem (8) | data (v) | ...
+    ...  ----------------- ------------ -------------- ----------  ...
+
+After the `alphabet-spec` section comes the `state-spec` section:
+
+    ...  ------------ -------------- ---------- -----------------  ...
+    ... | length (8) | num-elem (8) | data (v) | start-state (v) | ...
+    ...  ------------ -------------- ---------- -----------------  ...
+
+After the `state-spec` section comes the `term-states` section:
+
+    ...  ------------ ----------  ...
+    ... | length (8) | data (v) | ...
+    ...  ------------ ----------  ...
+
+After the `term-states` section comes the `transition-index-spec` section:
+
+    ...  ------------ --------------------       ---------------------------  ...
+    ... | length (8) | state-0-offset (8) | ... | state-num-elem-offset (8) | ...
+    ...  ------------ --------------------       ---------------------------  ...
+
+After the `transition-index-spec` section comes the `transition-func-spec`
+section:
+
+    ...  ------------ -------------- -------------- -------------
+    ... | length (8) | unknown (1+) | letter-1 (v) | state-1 (v) |
+    ...  ------------ -------------- -------------- -------------
+          -------------- -------------
+         | letter-n (v) | state-n (v) | (EOF)
+          -------------- -------------
+
+In the following sections we define the values in each section.
+
+### Header Information (`header`)
+
+In the header section, we define three values:
+
+     ----------- -------------
+    | magic (3) | version (1) |
+     ----------- -------------
+
+If this header is malformed, we cannot continue with parsing the DFA and must
+exit, indicating an error.
+
+#### Magic Identifier (`magic`)
 
 The first 3 bytes denote the type of the file; this is its magic value. We
 define the magic value for a binary encoded DFA to be `{0x44, 0x46, 0x41}`,
 which is DFA in ASCII.
 
 
-### Version Number (`version`)
+#### Version Number (`version`)
 
 The next byte denotes the version of the file; this is version one of the
 spec; the next byte is `{0x10}`.
 
 
-### Alphabet
+### Alphabet (`alphabet-spec`)
 
 This section defines the alphabet-related fields and how to parse them.
 
